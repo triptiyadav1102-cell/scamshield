@@ -24,42 +24,52 @@ export async function POST(req: Request) {
   }
 
   const key = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   if (!key) {
     console.error("GEMINI_API_KEY is missing");
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: message }] }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                verdict: { type: "STRING", enum: VERDICTS },
-                confidence: { type: "INTEGER" },
-                reasons: { type: "ARRAY", items: { type: "STRING" } },
-                advice: { type: "STRING" },
-              },
-              required: ["verdict", "confidence", "reasons", "advice"],
-            },
-          },
-        }),
-      }
-    );
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: [{ role: "user", parts: [{ text: message }] }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          verdict: { type: "STRING", enum: VERDICTS },
+          confidence: { type: "INTEGER" },
+          reasons: { type: "ARRAY", items: { type: "STRING" } },
+          advice: { type: "STRING" },
+        },
+        required: ["verdict", "confidence", "reasons", "advice"],
+      },
+    },
+  });
 
-    if (!res.ok) {
-      console.error("Gemini error:", res.status, await res.text());
+  try {
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          signal: AbortSignal.timeout(12000),
+          body: payload,
+        });
+      } catch (e) {
+        console.error("Gemini fetch attempt failed:", attempt, e);
+        res = null;
+      }
+      if (res && res.status !== 503 && res.status !== 429) break;
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+    }
+
+    if (!res || !res.ok) {
+      console.error("Gemini error:", res?.status, res ? await res.text() : "no response");
       return NextResponse.json({ error: "AI request failed" }, { status: 502 });
     }
 
@@ -69,7 +79,7 @@ export async function POST(req: Request) {
 
     let confidence = Number(parsed.confidence);
     if (!Number.isFinite(confidence)) confidence = 0;
-    if (confidence > 0 && confidence <= 1) confidence *= 100; // handle 0.85 style
+    if (confidence > 0 && confidence <= 1) confidence *= 100;
     confidence = Math.round(Math.min(100, Math.max(0, confidence)));
 
     return NextResponse.json({
