@@ -47,6 +47,12 @@ function analyze(text: string): Result {
   return { score, level, flags };
 }
 
+const EXAMPLES = [
+  { label: "Bank KYC scam", text: "Dear customer, your SBI account is on hold. Complete your KYC today at http://sbi-kyc-verify.in or it will be closed." },
+  { label: "Prize scam", text: "Congratulations! You are the winner of a cash reward of Rs 50,000. Claim now within 24 hours: bit.ly/claim-prize" },
+  { label: "Normal message", text: "Hi, are we meeting at 5 near the library?" },
+];
+
 export default function Home() {
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<Result | null>(null);
@@ -94,6 +100,17 @@ export default function Home() {
           placeholder="Paste SMS, email or link here..."
           className="mt-4 h-40 w-full rounded-lg border bg-white p-3"
         />
+        <div className="mt-3 flex flex-wrap gap-2">
+  {EXAMPLES.map((ex) => (
+    <button
+      key={ex.label}
+      onClick={() => setMessage(ex.text)}
+      className="rounded-full border bg-white px-3 py-1 text-sm text-gray-700"
+    >
+      {ex.label}
+    </button>
+  ))}
+</div>
         <button
           onClick={handleCheck}
           className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-white"
