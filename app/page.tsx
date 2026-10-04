@@ -2,12 +2,12 @@
 import { useState } from "react";
 
 type Result = { score: number; level: string; flags: string[] };
+type AI = { verdict: string; confidence: number; reasons: string[]; advice: string };
 
 function analyze(text: string): Result {
   const lower = text.toLowerCase();
   const flags: string[] = [];
   let score = 0;
-
   const has = (words: string[]) => words.some((w) => lower.includes(w));
 
   if (has(["urgent", "immediately", "act now", "last chance", "within 24 hours", "expires today"])) {
@@ -34,7 +34,6 @@ function analyze(text: string): Result {
     flags.push("Uses a shortened link that hides the real site");
     score += 20;
   }
-
   score = Math.min(score, 100);
   const level = score >= 60 ? "Likely Scam" : score >= 30 ? "Suspicious" : "Looks Safe";
   return { score, level, flags };
@@ -43,9 +42,29 @@ function analyze(text: string): Result {
 export default function Home() {
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [ai, setAi] = useState<AI | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleCheck() {
+  async function handleCheck() {
+    if (!message.trim()) return;
     setResult(analyze(message));
+    setAi(null);
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error("AI check failed");
+      setAi(data);
+    } catch {
+      setError("AI check unavailable. Showing rule-based result only.");
+    }
+    setLoading(false);
   }
 
   const color =
@@ -67,7 +86,6 @@ export default function Home() {
           placeholder="Paste SMS, email or link here..."
           className="mt-4 h-40 w-full rounded-lg border bg-white p-3"
         />
-
         <button
           onClick={handleCheck}
           className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-white"
@@ -77,6 +95,7 @@ export default function Home() {
 
         {result && (
           <div className="mt-6 rounded-lg border bg-white p-4">
+            <p className="text-sm font-semibold text-gray-500">Rule-based check</p>
             <p className={"text-2xl font-bold " + color}>
               {result.level} ({result.score}/100)
             </p>
@@ -87,6 +106,24 @@ export default function Home() {
                 ))}
               </ul>
             )}
+          </div>
+        )}
+
+        {loading && <p className="mt-4 text-gray-600">AI is analyzing...</p>}
+        {error && <p className="mt-4 text-orange-600">{error}</p>}
+
+        {ai && (
+          <div className="mt-4 rounded-lg border bg-white p-4">
+            <p className="text-sm font-semibold text-gray-500">AI analysis</p>
+            <p className="text-2xl font-bold">
+              {ai.verdict} ({ai.confidence}% sure)
+            </p>
+            <ul className="mt-3 list-disc pl-5">
+              {ai.reasons?.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+            <p className="mt-3 rounded bg-blue-50 p-3">{ai.advice}</p>
           </div>
         )}
       </div>
