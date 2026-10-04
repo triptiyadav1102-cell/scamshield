@@ -18,11 +18,11 @@ function analyze(text: string): Result {
     flags.push("Promises money or prizes");
     score += 25;
   }
-  if (has(["verify your account", "account blocked", "account suspended", "kyc", "update your details"])) {
+  if (has(["verify your account", "account blocked", "account suspended", "account is on hold", "on hold", "will be closed", "will be blocked", "kyc", "update your details"])) {
     flags.push("Threatens your account");
     score += 25;
   }
-  if (has(["otp", "password", "pin", "cvv", "card number"])) {
+  if (has(["otp", "password", "otp pin", "cvv", "card number"])) {
     flags.push("Asks for sensitive information");
     score += 30;
   }
@@ -32,6 +32,14 @@ function analyze(text: string): Result {
   }
   if (/(bit\.ly|tinyurl|cutt\.ly|goo\.gl)/.test(lower)) {
     flags.push("Uses a shortened link that hides the real site");
+    score += 20;
+  }
+    if (/http:\/\//.test(lower)) {
+    flags.push("Uses an insecure http link");
+    score += 15;
+  }
+  if (/\b(sbi|hdfc|icici|axis bank|paytm|upi)\b/.test(lower) && /https?:\/\//.test(lower)) {
+    flags.push("Mentions a bank or payment app with a link");
     score += 20;
   }
   score = Math.min(score, 100);
